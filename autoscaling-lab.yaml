@@ -9,6 +9,25 @@ Parameters:
   VpcId:
     Description: ID of your existing VPC
     Type: AWS::EC2::VPC::Id
+  PublicSubnet1:
+    Description: First public subnet for the load balancer (AZ1)
+    Type: AWS::EC2::Subnet::Id
+  PublicSubnet2:
+    Description: Second public subnet for the load balancer (AZ2)
+    Type: AWS::EC2::Subnet::Id
+  PrivateSubnet1:
+    Description: First private subnet for the ASG instances (AZ1)
+    Type: AWS::EC2::Subnet::Id
+  PrivateSubnet2:
+    Description: Second private subnet for the ASG instances (AZ2)
+    Type: AWS::EC2::Subnet::Id
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair
+  VpcId:
+    Description: ID of your existing VPC
+    Type: AWS::EC2::VPC::Id
   PublicSubnet:
     Description: Public subnet for the load balancer
     Type: AWS::EC2::Subnet::Id
@@ -138,7 +157,25 @@ Resources:
             ln -s /var/www/html/stress-cpu /var/www/cgi-bin/stress-cpu
 
   # Auto Scaling Group
+
   WebServerASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: WebServerASG
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WebServerLaunchTemplate
+        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+      MinSize: 1
+      MaxSize: 3
+      DesiredCapacity: 1
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      TargetGroupARNs:
+        - !Ref WebServerTargetGroup
+      Cooldown: 300
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: WebServerASG
@@ -198,6 +235,17 @@ Resources:
       UnhealthyThresholdCount: 2
 
   WebServerLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: WebServerLoadBalancer
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !GetAtt LoadBalancerSecurityGroup.GroupId
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: WebServerLoadBalancer
