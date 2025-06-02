@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Auto Scaling Apache Web Server with CPU-based scaling'
+Description: 'Auto Scaling Apache Web Server with CPU-based scaling in eu-central-1'
 
 Parameters:
   KeyName:
@@ -21,19 +21,11 @@ Parameters:
   PrivateSubnet2:
     Description: Second private subnet for the ASG instances (AZ2)
     Type: AWS::EC2::Subnet::Id
-  KeyName:
-    Description: Name of an existing EC2 KeyPair to enable SSH access
-    Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair
-  VpcId:
-    Description: ID of your existing VPC
-    Type: AWS::EC2::VPC::Id
-  PublicSubnet:
-    Description: Public subnet for the load balancer
-    Type: AWS::EC2::Subnet::Id
-  PrivateSubnet:
-    Description: Private subnet for the ASG instances
-    Type: AWS::EC2::Subnet::Id
+
+Mappings:
+  RegionMap:
+    eu-central-1:
+      AMI: "ami-0dcc0ebde7b2e00db"  # Amazon Linux 2 in Frankfurt
 
 Resources:
   # Security Groups
@@ -98,7 +90,7 @@ Resources:
     Properties:
       LaunchTemplateName: WebServerLaunchTemplate
       LaunchTemplateData:
-        ImageId: ami-0c55b159cbfafe1f0  # Amazon Linux 2 AMI (update if needed)
+        ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
         InstanceType: t2.micro
         KeyName: !Ref KeyName
         SecurityGroupIds:
@@ -157,7 +149,6 @@ Resources:
             ln -s /var/www/html/stress-cpu /var/www/cgi-bin/stress-cpu
 
   # Auto Scaling Group
-
   WebServerASG:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -171,22 +162,6 @@ Resources:
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
-      TargetGroupARNs:
-        - !Ref WebServerTargetGroup
-      Cooldown: 300
-      HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      AutoScalingGroupName: WebServerASG
-      LaunchTemplate:
-        LaunchTemplateId: !Ref WebServerLaunchTemplate
-        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
-      MinSize: 1
-      MaxSize: 3
-      DesiredCapacity: 1
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnet
       TargetGroupARNs:
         - !Ref WebServerTargetGroup
       Cooldown: 300
@@ -241,16 +216,6 @@ Resources:
       Subnets:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
-      SecurityGroups:
-        - !GetAtt LoadBalancerSecurityGroup.GroupId
-      Scheme: internet-facing
-      Type: application
-      IpAddressType: ipv4
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: WebServerLoadBalancer
-      Subnets:
-        - !Ref PublicSubnet
       SecurityGroups:
         - !GetAtt LoadBalancerSecurityGroup.GroupId
       Scheme: internet-facing
